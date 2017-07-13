@@ -1,0 +1,129 @@
+- id: primary-watcher-node
+  type: group
+  role: [primary-watcher-node]
+  tasks: &common_tasks
+    - hiera
+    - setup_repositories
+    - fuel_pkgs
+    - globals
+    - tools
+    - logging
+    - hiera_default_route
+    - netconfig
+    - hosts
+  required_for: [deploy_end]
+  requires: [primary-controller]
+  parameters:
+    strategy:
+      type: one_by_one
+
+- id: watcher-node
+  type: group
+  role: [watcher-node]
+  tasks: *common_tasks
+  required_for: [deploy_end]
+  requires: [primary-watcher-node]
+  parameters:
+    strategy:
+      type: parallel
+
+- id: hiera-watcher-override
+  version: 2.1.0
+  type: puppet
+  groups: ['primary-controller', 'controller', 'primary-watcher-node', 'watcher-node']
+  required_for: [logging]
+  requires: [globals]
+  parameters:
+    puppet_manifest: manifests/watcher_hiera_override.pp
+    puppet_modules: /etc/puppet/modules
+    timeout: 120
+  # reexecute_on is needed for scale-down operations
+  reexecute_on:
+    - deploy_changes
+
+- id: pin-watcher-plugin-repo
+  version: 2.1.0
+  type: puppet
+  groups: ['primary-watcher-node', 'watcher-node' ]
+  required_for: [hiera-watcher-override]
+  requires: [globals]
+  parameters:
+    puppet_manifest: manifests/watcher_pin_plugin_repo.pp
+    puppet_modules: /etc/puppet/modules
+    timeout: 120
+
+- id: watcher-keystone-endpoints
+  version: 2.1.0
+  type: puppet
+  groups: ['primary-controller']
+  required_for: [watcher-controller-end]
+  requires: [primary-keystone, keystone]
+  parameters:
+    puppet_manifest: manifests/watcher_keystone.pp
+    puppet_modules: modules:/etc/puppet/modules
+    timeout: 1800
+
+- id: watcher-database
+  version: 2.1.0
+  type: puppet
+  groups: ['primary-controller']
+  cross-depends:
+    - name: /(primary-)?database/
+  required_for: [watcher-controller-end]
+  requires: [primary-database, database]
+  parameters:
+    puppet_manifest: manifests/watcher_db.pp
+    puppet_modules: modules:/etc/puppet/modules
+    timeout: 1800
+
+- id: watcher-controller-end
+  version: 2.1.0
+  type: skipped
+  groups: ['primary-controller','controller']
+  required_for: [deploy_end]
+  requires: []
+
+- id: watcher-haproxy
+  version: 2.1.0
+  type: puppet
+  groups: ['primary-controller', 'controller']
+  required_for: [watcher-controller-end]
+  requires: [deploy_start, primary-cluster-haproxy, cluster-haproxy]
+  parameters:
+    puppet_manifest: manifests/watcher_haproxy.pp
+    puppet_modules: /etc/puppet/modules
+    timeout: 300
+
+- id: watcher-logging
+  version: 2.1.0
+  type: puppet
+  groups: ['primary-controller', 'controller', 'primary-watcher-node', 'watcher-node']
+  required_for: [watcher-services]
+  requires: [logging]
+  parameters:
+    puppet_manifest: manifests/watcher_logging.pp
+    puppet_modules: /etc/puppet/modules
+    timeout: 1800
+
+- id: watcher-services
+  version: 2.1.0
+  type: puppet
+  groups: ['primary-watcher-node', 'watcher-node']
+  required_for: [deploy_end]
+  requires: [hosts]
+  cross-depends:
+    - name: watcher-controller-end
+  parameters:
+    puppet_manifest: manifests/watcher.pp
+    puppet_modules: modules:/etc/puppet/modules
+    timeout: 3600
+
+- id: watcher-timezone
+  version: 2.1.0
+  type: puppet
+  groups: ['primary-watcher-node', 'watcher-node']
+  required_for: [watcher-services]
+  parameters:
+    puppet_manifest: manifests/watcher_timezone.pp
+    puppet_modules: /etc/puppet/modules
+    timeout: 300
