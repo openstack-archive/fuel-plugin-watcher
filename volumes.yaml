@@ -1,4 +1,0 @@
-volumes: []
-volumes_roles_mapping:
-  watcher-node:
-    - {allocate_size: "min", id: "os"}

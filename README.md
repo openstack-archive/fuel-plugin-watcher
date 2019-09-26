@@ -1,2 +1,3 @@
-# Detached watcher role
-Plugin to deploy watcher on separate node
+# This repo has moved to OpenDev
+
+It can now be found at [https://opendev.org/x/fuel-plugin-watcher](https://opendev.org/x/fuel-plugin-watcher)
